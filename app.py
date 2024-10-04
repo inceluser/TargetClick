@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, session, jsonify
-import json
+import sqlite3
 import os
 import time
 import random
@@ -7,24 +7,36 @@ import random
 app = Flask(__name__)
 app.secret_key = 'R3EdyG8VCe'
 
-# Путь к JSON файлу для хранения результатов
-RESULTS_FILE = 'results.json'
+# Путь к файлу базы данных
+DATABASE = 'results.db'
 
-# Чтение результатов из JSON файла
+# Инициализация базы данных
+def init_db():
+    with sqlite3.connect(DATABASE) as conn:
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS results (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                time_spent REAL NOT NULL
+            )
+        ''')
+        conn.commit()
+
+# Загрузка результатов из базы данных
 def load_results():
-    if os.path.exists(RESULTS_FILE):
-        with open(RESULTS_FILE, 'r') as f:
-            results = json.load(f)
-            # Преобразуем время в float для всех результатов
-            for result in results:
-                result['time_spent'] = float(result['time_spent'])
-            return results
-    return []
+    with sqlite3.connect(DATABASE) as conn:
+        c = conn.cursor()
+        c.execute('SELECT username, time_spent FROM results ORDER BY time_spent')
+        results = [{'username': row[0], 'time_spent': row[1]} for row in c.fetchall()]
+    return results
 
-# Запись результатов в JSON файл
-def save_results(results):
-    with open(RESULTS_FILE, 'w') as f:
-        json.dump(results, f)
+# Запись результатов в базу данных
+def save_result(username, time_spent):
+    with sqlite3.connect(DATABASE) as conn:
+        c = conn.cursor()
+        c.execute('INSERT INTO results (username, time_spent) VALUES (?, ?)', (username, time_spent))
+        conn.commit()
 
 # Главная страница с игрой
 @app.route('/')
@@ -54,17 +66,8 @@ def submit_result():
     time_spent = float(request.form['time_spent'])
     username = session['username']
     
-    # Загрузка текущих результатов
-    results = load_results()
-    
-    # Добавление нового результата
-    results.append({'username': username, 'time_spent': time_spent})
-    
-    # Сортировка результатов по времени (чем меньше, тем лучше)
-    results = sorted(results, key=lambda x: x['time_spent'])  # Преобразуем время в float
-    
-    # Сохранение обновленных результатов
-    save_results(results)
+    # Сохранение нового результата в базу данных
+    save_result(username, time_spent)
     
     return redirect('/results')
 
@@ -79,6 +82,9 @@ def results():
 def logout():
     session.pop('username', None)
     return redirect('/login')
+
+# Инициализация базы данных при запуске приложения
+init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)

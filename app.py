@@ -82,9 +82,10 @@ def results():
 def logout():
     session.pop('username', None)
     return redirect('/login')
+        # 
 
 # Инициализация базы данных при запуске приложения
 init_db()
-
+    
 if __name__ == '__main__':
     app.run(debug=True)
